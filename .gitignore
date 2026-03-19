@@ -1,5 +1,6 @@
 bin/
 obj/
 *.user
+Errors.txt
 .claude/override-path
 .claude/settings.local.json
