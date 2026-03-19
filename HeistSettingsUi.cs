@@ -22,7 +22,7 @@ public sealed class HeistSettingsUi
     private int _activeTab;
     private readonly Dictionary<string, float> _anims = new();
 
-    private static readonly string[] Tabs = { "Route", "Doors", "Rewards", "Escape" };
+    private static readonly string[] Tabs = { "Route", "Doors", "Endpoints", "Escape" };
 
     // Dark teal/vault accent (#1A936F)
     private static uint Accent => Col(0.102f, 0.576f, 0.435f);
@@ -156,8 +156,8 @@ public sealed class HeistSettingsUi
         DrawInfoBlock(dl, x, ref y,
             "Heist Route",
             "Connects HeistPathNode entities into a navigation graph.\n" +
-            "Dijkstra pathfinding routes you to reward rooms (infiltration)\n" +
-            "or back to the exit (escape phase).");
+            "Dijkstra pathfinding routes to the objective (infiltration)\n" +
+            "or back to the entrance (escape phase).");
 
         // Route status
         DrawStatusLine(dl, x, ref y,
@@ -230,18 +230,19 @@ public sealed class HeistSettingsUi
         float x, float cx, ref float y, float sw, HeistUiState state)
     {
         DrawInfoBlock(dl, x, ref y,
-            "Reward Rooms",
-            "HeistPathEndpoint entities mark reward room entrances.\n" +
-            "The route targets the nearest reachable endpoint.");
+            "Heist Endpoints",
+            "HeistPathEndpoint entities mark locked door locations.\n" +
+            "The farthest endpoint from entrance is the objective.\n" +
+            "Other endpoints show their NPC door job type.");
 
         DrawStatusLine(dl, x, ref y, state.EndpointCount, "endpoint", "found");
         DrawStatusLine(dl, x, ref y, state.ChestCount, "reward chest", "visible");
 
         SectionHeader(dl, x, ref y, "Visibility");
         Toggle("ht_ep_show", s.ShowEndpoints, dl, x, cx, ref y,
-            "Show Endpoints", "Render gold markers at reward room entrances");
+            "Show Endpoints", "Render markers at endpoint/door locations");
         Toggle("ht_ep_lbl", s.ShowRewardLabel, dl, x, cx, ref y,
-            "Reward Labels", "Display reward type text above endpoints");
+            "Door Labels", "Display door job or Objective label at endpoints");
 
         SectionHeader(dl, x, ref y, "Minimap");
         Toggle("ht_ep_mmap", s.ShowOnMinimap, dl, x, cx, ref y,
@@ -251,7 +252,7 @@ public sealed class HeistSettingsUi
 
         SectionHeader(dl, x, ref y, "Appearance");
         ColorPicker("ht_ep_col", s.EndpointColor, dl, x, cx, ref y,
-            "Endpoint Color", "Color for reward room entrance markers");
+            "Endpoint Color", "Color for objective endpoint (others are dimmed)");
     }
 
     private void TabEscape(ImDrawListPtr dl, EscapeSettings s,
@@ -279,8 +280,8 @@ public sealed class HeistSettingsUi
 
         DrawInfoBlock(dl, x, ref y,
             "Escape Route",
-            "When the alarm maxes out, an Escape Route portal appears.\n" +
-            "The route switches to guide you back to the exit.\n" +
+            "When reinforcements spawn (alarm maxed), escape activates.\n" +
+            "The route switches to guide you back to the entrance.\n" +
             "Path color changes to the escape color for visibility.");
 
         SectionHeader(dl, x, ref y, "Escape Path");

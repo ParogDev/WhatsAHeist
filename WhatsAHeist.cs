@@ -5,6 +5,7 @@ using System.Linq;
 using ExileCore;
 using ExileCore.PoEMemory.Components;
 using ExileCore.PoEMemory.MemoryObjects;
+using ExileCore.Shared.Enums;
 using ExileCore.Shared.Helpers;
 using ImGuiNET;
 using Color = SharpDX.Color;
@@ -23,6 +24,10 @@ public class WhatsAHeist : BaseSettingsPlugin<WhatsAHeistSettings>
     private readonly Dictionary<uint, HeistChestData> _chests = new();
     private Entity _escapeRoute;
 
+    // Entrance reference position (from Escape Route AreaTransition or HeistPathStart)
+    private Vector2 _entranceGridPos;
+    private bool _hasEntrance;
+
     // Graph + pathfinding
     private readonly HeistGraph _graph = new();
     private List<GraphNode> _currentRoute;
@@ -33,6 +38,8 @@ public class WhatsAHeist : BaseSettingsPlugin<WhatsAHeistSettings>
     // Phase
     private HeistPhase _currentPhase = HeistPhase.Infiltration;
     private bool _isHeistZone;
+    private bool _initialLoadComplete;
+    private bool _reinforcementDetected;
 
     // Minimap state
     private bool? _largeMap;
@@ -64,10 +71,14 @@ public class WhatsAHeist : BaseSettingsPlugin<WhatsAHeistSettings>
         _doors.Clear();
         _chests.Clear();
         _escapeRoute = null;
+        _entranceGridPos = Vector2.Zero;
+        _hasEntrance = false;
         _currentRoute = null;
         _graphDirty = true;
         _currentPhase = HeistPhase.Infiltration;
         _isHeistZone = false;
+        _initialLoadComplete = false;
+        _reinforcementDetected = false;
         _lastRoutePlayerPos = Vector2.Zero;
         _heightData = GameController.IngameState.Data.RawTerrainHeightData;
     }
@@ -83,6 +94,12 @@ public class WhatsAHeist : BaseSettingsPlugin<WhatsAHeistSettings>
             _isHeistZone = true;
             _pathStart = new HeistPathNodeData(entity, HeistNodeType.Start);
             _graphDirty = true;
+            // HeistPathStart marks the entrance if we don't have the AreaTransition yet
+            if (!_hasEntrance)
+            {
+                _entranceGridPos = entity.GridPosNum;
+                _hasEntrance = true;
+            }
         }
         else if (path.Contains("HeistPathEndpoint", StringComparison.Ordinal))
         {
@@ -107,12 +124,24 @@ public class WhatsAHeist : BaseSettingsPlugin<WhatsAHeistSettings>
             if (render?.Name?.Contains("Escape", StringComparison.OrdinalIgnoreCase) == true)
             {
                 _escapeRoute = entity;
+                _isHeistZone = true;
+                // The Escape Route AreaTransition is always near the heist entrance
+                _entranceGridPos = entity.GridPosNum;
+                _hasEntrance = true;
             }
         }
         else if (path.Contains("Heist", StringComparison.Ordinal) &&
                  path.Contains("Chest", StringComparison.Ordinal))
         {
             _chests[entity.Id] = new HeistChestData(entity);
+        }
+
+        // Detect reinforcement spawns (alarm maxed) after initial zone load
+        if (_initialLoadComplete && !_reinforcementDetected &&
+            (path.Contains("HeistSoldier", StringComparison.Ordinal) ||
+             path.Contains("LeagueHeist/Military", StringComparison.Ordinal)))
+        {
+            _reinforcementDetected = true;
         }
     }
 
@@ -157,8 +186,12 @@ public class WhatsAHeist : BaseSettingsPlugin<WhatsAHeistSettings>
                 chest.IsOpened = chestComp.IsOpened;
         }
 
-        // Detect escape phase
-        if (_currentPhase == HeistPhase.Infiltration && _escapeRoute?.IsValid == true)
+        // Mark initial load complete after first tick so we can detect reinforcements
+        if (!_initialLoadComplete)
+            _initialLoadComplete = true;
+
+        // Detect escape phase via reinforcement spawns (not escape route entity presence)
+        if (_currentPhase == HeistPhase.Infiltration && _reinforcementDetected)
         {
             _currentPhase = HeistPhase.Escape;
             _currentRoute = null; // Force recompute
@@ -169,8 +202,47 @@ public class WhatsAHeist : BaseSettingsPlugin<WhatsAHeistSettings>
             _pathStart.GridPos = _pathStart.Entity.GridPosNum;
         foreach (var node in _pathNodes.Values)
             if (node.Entity.IsValid) node.GridPos = node.Entity.GridPosNum;
+
+        // Update endpoint positions and associate with nearby doors
+        var entranceRef = _hasEntrance ? _entranceGridPos : Vector2.Zero;
+        float farthestEndpointDist = 0;
+        HeistPathNodeData farthestEndpoint = null;
+
         foreach (var ep in _pathEndpoints.Values)
-            if (ep.Entity.IsValid) ep.GridPos = ep.Entity.GridPosNum;
+        {
+            if (!ep.Entity.IsValid) continue;
+            ep.GridPos = ep.Entity.GridPosNum;
+
+            // Find nearest door within 30 grid units for job label
+            if (ep.NearbyDoorJob == null)
+            {
+                float bestDoorDist = 30f;
+                foreach (var door in _doors.Values)
+                {
+                    var d = Vector2.Distance(ep.GridPos, door.GridPos);
+                    if (d < bestDoorDist)
+                    {
+                        bestDoorDist = d;
+                        ep.NearbyDoorJob = door.RequiredJob;
+                    }
+                }
+            }
+
+            // Track farthest endpoint from entrance
+            if (_hasEntrance)
+            {
+                var dist = Vector2.Distance(ep.GridPos, entranceRef);
+                if (dist > farthestEndpointDist)
+                {
+                    farthestEndpointDist = dist;
+                    farthestEndpoint = ep;
+                }
+            }
+        }
+
+        // Mark the objective endpoint (farthest from entrance)
+        foreach (var ep in _pathEndpoints.Values)
+            ep.IsObjective = ep == farthestEndpoint;
 
         // Rebuild graph if dirty (throttled)
         if (_graphDirty && _graphThrottle.ElapsedMilliseconds > 500)
@@ -244,7 +316,7 @@ public class WhatsAHeist : BaseSettingsPlugin<WhatsAHeistSettings>
 
         if (_currentPhase == HeistPhase.Escape)
         {
-            // Route toward start or escape route entity
+            // Route toward entrance: escape route entity or start node
             GraphNode bestTarget = null;
             float bestDist = float.MaxValue;
 
@@ -258,7 +330,6 @@ public class WhatsAHeist : BaseSettingsPlugin<WhatsAHeistSettings>
                 }
             }
 
-            // Also consider the start node
             foreach (var node in _graph.Nodes)
             {
                 if (node.Data.NodeType != HeistNodeType.Start) continue;
@@ -273,22 +344,54 @@ public class WhatsAHeist : BaseSettingsPlugin<WhatsAHeistSettings>
         }
         else
         {
-            // Route toward nearest unvisited endpoint
-            GraphNode bestTarget = null;
-            float bestDist = float.MaxValue;
+            // Infiltration: route AWAY from entrance, toward the deepest part of the heist
+            // 1) Find endpoints that are far from entrance (real reward rooms)
+            // 2) If none, route to the frontier (farthest reachable node from entrance)
+
+            var entranceRef = _hasEntrance ? _entranceGridPos : playerGridPos;
+
+            // Look for endpoints far from entrance (>80 grid units)
+            GraphNode bestEndpoint = null;
+            float bestEndpointDistFromEntrance = 0;
 
             foreach (var node in _graph.Nodes)
             {
                 if (node.Data.NodeType != HeistNodeType.Endpoint) continue;
                 if (node.Data.IsVisited) continue;
-                if (dijkstra.TryGetValue(node, out var info) && info.Dist < bestDist)
+                if (!dijkstra.ContainsKey(node)) continue;
+
+                var distFromEntrance = Vector2.Distance(node.Data.GridPos, entranceRef);
+                if (distFromEntrance > 80 && distFromEntrance > bestEndpointDistFromEntrance)
                 {
-                    bestTarget = node;
-                    bestDist = info.Dist;
+                    bestEndpointDistFromEntrance = distFromEntrance;
+                    bestEndpoint = node;
                 }
             }
 
-            _currentRoute = bestTarget != null ? _graph.ReconstructPath(dijkstra, bestTarget) : null;
+            if (bestEndpoint != null)
+            {
+                _currentRoute = _graph.ReconstructPath(dijkstra, bestEndpoint);
+            }
+            else
+            {
+                // No distant endpoints found - route to the frontier
+                // Pick the reachable node farthest from entrance
+                GraphNode frontier = null;
+                float frontierDist = 0;
+
+                foreach (var node in _graph.Nodes)
+                {
+                    if (!dijkstra.ContainsKey(node)) continue;
+                    var distFromEntrance = Vector2.Distance(node.Data.GridPos, entranceRef);
+                    if (distFromEntrance > frontierDist)
+                    {
+                        frontierDist = distFromEntrance;
+                        frontier = node;
+                    }
+                }
+
+                _currentRoute = frontier != null ? _graph.ReconstructPath(dijkstra, frontier) : null;
+            }
         }
     }
 
@@ -363,7 +466,7 @@ public class WhatsAHeist : BaseSettingsPlugin<WhatsAHeistSettings>
             }
         }
 
-        // Draw endpoints
+        // Draw endpoints with door job labels
         if (Settings.Endpoints.ShowEndpoints)
         {
             foreach (var ep in _pathEndpoints.Values)
@@ -373,17 +476,30 @@ public class WhatsAHeist : BaseSettingsPlugin<WhatsAHeistSettings>
                 if (gridDist > maxDist) continue;
 
                 var worldPos = ep.Entity.PosNum;
-                var color = Settings.Endpoints.EndpointColor.Value;
+                var color = ep.IsObjective
+                    ? Settings.Endpoints.EndpointColor.Value
+                    : new Color(
+                        (int)(Settings.Endpoints.EndpointColor.Value.R * 0.5f),
+                        (int)(Settings.Endpoints.EndpointColor.Value.G * 0.5f),
+                        (int)(Settings.Endpoints.EndpointColor.Value.B * 0.5f),
+                        Settings.Endpoints.EndpointColor.Value.A);
 
-                Graphics.DrawCircleInWorld(worldPos, 60, color, 2, 24, true);
+                var circleSize = ep.IsObjective ? 60 : 40;
+                Graphics.DrawCircleInWorld(worldPos, circleSize, color, 2, 24, true);
 
                 if (Settings.Endpoints.ShowRewardLabel)
                 {
                     var screenPos = Camera.WorldToScreen(worldPos);
                     if (IsOnScreen(screenPos))
                     {
-                        Graphics.DrawText("Reward Room",
-                            screenPos - new Vector2(0, 30), color, FontAlign.Center);
+                        var label = ep.IsObjective
+                            ? "Objective"
+                            : ep.NearbyDoorJob ?? "";
+                        if (!string.IsNullOrEmpty(label))
+                        {
+                            Graphics.DrawText(label,
+                                screenPos - new Vector2(0, 30), color, FontAlign.Center);
+                        }
                     }
                 }
 

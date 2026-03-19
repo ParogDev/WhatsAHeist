@@ -22,6 +22,8 @@ public class HeistPathNodeData
     public System.Numerics.Vector2 GridPos { get; set; }
     public HeistNodeType NodeType { get; }
     public bool IsVisited { get; set; }
+    public string NearbyDoorJob { get; set; }
+    public bool IsObjective { get; set; }
 
     public HeistPathNodeData(Entity entity, HeistNodeType nodeType)
     {
