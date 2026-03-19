@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:www.poewiki.net)",
+      "WebFetch(domain:poedb.tw)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:exapitools.github.io)",
+      "WebSearch"
+    ]
+  }
+}
