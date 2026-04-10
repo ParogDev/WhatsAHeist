@@ -60,6 +60,7 @@ public class WhatsAHeist : BaseSettingsPlugin<WhatsAHeistSettings>
 
     public override bool Initialise()
     {
+        Name = "Whats A Heist";
         return true;
     }
 
