@@ -376,7 +376,7 @@ if (getData != null) { var data = getData(); }
 
 ### Custom ImGui Settings UI
 
-This plugin uses a dedicated `HeistSettingsUi` class with dark teal accent (#1A936F), 4 tabs (Route, Doors, Rewards, Escape), and self-contained PillToggle/SliderInt/SliderFloat/ColorPicker/SectionHeader widget primitives. See `HeistSettingsUi.cs` for the full implementation.
+The settings panel is drawn by `SettingsMenu.cs` (per-plugin copy of the scaffolding's `new-plugin/templates/SettingsMenu.template.cs`, `__HUD__` = ExileCore) from the `[Menu]` attributes: one tab per root `[Submenu]` (Route / Doors / Endpoints / Escape; General joins Route via `[MenuTab]`), `[MenuUnit]` slider units, `[Menu(..., index, parentIndex)]` nesting. `HeistSettingsUi` builds it (dark teal accent #1A936F) and adds what it can't know: the live status strip (`.Banner`), and per tab an explanation, live status lines, the door colour legend and the escape-phase banner (`.Tab(..., first: true)`).
 
 ### UI-First Feature Development
 
