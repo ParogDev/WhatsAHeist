@@ -410,8 +410,12 @@ public class WhatsAHeist : BaseSettingsPlugin<WhatsAHeistSettings>
         var playerWorldPos = playerRender.PosNum;
         var maxDist = Settings.General.MaxDrawDistance.Value;
 
+        // Escape phase with Show Escape Route off: the route, arrow and EXIT marker toward the entrance are not drawn
+        // (the alarm flash keeps its own toggle).
+        var escapeHidden = _currentPhase == HeistPhase.Escape && !Settings.Escape.ShowEscapeRoute.Value;
+
         // Draw route path
-        if (_currentRoute is { Count: > 1 })
+        if (_currentRoute is { Count: > 1 } && !escapeHidden)
         {
             var pathColor = _currentPhase == HeistPhase.Escape
                 ? Settings.Escape.EscapePathColor.Value
@@ -513,7 +517,7 @@ public class WhatsAHeist : BaseSettingsPlugin<WhatsAHeistSettings>
         }
 
         // Draw escape route entity marker
-        if (_currentPhase == HeistPhase.Escape && _escapeRoute?.IsValid == true)
+        if (_currentPhase == HeistPhase.Escape && !escapeHidden && _escapeRoute?.IsValid == true)
         {
             var escapeWorldPos = _escapeRoute.PosNum;
             var escapeColor = Settings.Escape.EscapePathColor.Value;
