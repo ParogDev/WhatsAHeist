@@ -80,7 +80,8 @@ public sealed class HeistSettingsUi
             + "(infiltration) or back to the entrance (escape phase).");
         var state = _state;
         if (state == null) return;
-        StatusLine(state.HasRoute ? 1 : 0, "active route", "computed");
+        Dot(state.HasRoute ? StatusGreen : StatusDim, state.HasRoute ? "Route computed" : "No route yet",
+            state.HasRoute ? ImGui.GetStyle().Colors[(int)ImGuiCol.Text] : StatusDim);
         StatusLine(state.HasGraph ? state.NodeCount : 0, "graph node", "connected");
         ImGui.Spacing();
     }

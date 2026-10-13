@@ -104,7 +104,8 @@ public class EndpointSettings
 [Submenu]
 public class EscapeSettings
 {
-    [Menu("Show Escape Route", "Reserved for hiding the escape path; not read by the plugin yet (the escape path always draws)")]
+    [MenuReadOnly("Reserved: not read by the plugin yet (the escape path always draws)")]
+    [Menu("Show Escape Route","Reserved for hiding the escape path; not read by the plugin yet (the escape path always draws)")]
     public ToggleNode ShowEscapeRoute { get; set; } = new(true);
 
     [Menu("Escape Color", "Route line and arrow color once the alarm starts the escape phase")]
