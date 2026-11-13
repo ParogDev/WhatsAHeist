@@ -7,7 +7,7 @@ using ExileCore.PoEMemory.Components;
 using ExileCore.PoEMemory.MemoryObjects;
 using ExileCore.Shared.Enums;
 using ExileCore.Shared.Helpers;
-using ImGuiNET;
+using Hexa.NET.ImGui;
 using Color = SharpDX.Color;
 using Vector2 = System.Numerics.Vector2;
 using Vector3 = System.Numerics.Vector3;
