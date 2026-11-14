@@ -52,6 +52,11 @@ public class WhatsAHeist : BaseSettingsPlugin<WhatsAHeistSettings>
     // Constants
     private const float GridToWorldMultiplier = 250f / 23f;
     private const float CameraAngle = 38.7f * MathF.PI / 180;
+
+    // ImGui 1.93 draws frames inside their rect by default; StrokeLegacy keeps the 1.90 centred stroke, so the
+    // full-screen alarm frame stays half off-screen (the same visible weight as before).
+    private const int LegacyStroke = (int)ImDrawFlags.StrokeLegacy;
+
     private static readonly float CameraAngleCos = MathF.Cos(CameraAngle);
     private static readonly float CameraAngleSin = MathF.Sin(CameraAngle);
 
@@ -537,7 +542,7 @@ public class WhatsAHeist : BaseSettingsPlugin<WhatsAHeistSettings>
             float pulse = (float)(0.15 + 0.1 * Math.Sin(Environment.TickCount64 / 200.0));
             var flashColor = new Color(255, 50, 0, (int)(pulse * 255));
             var screenSize = new Vector2(Camera.Width, Camera.Height);
-            Graphics.DrawFrame(Vector2.Zero, screenSize, flashColor, 4);
+            Graphics.DrawFrame(Vector2.Zero, screenSize, flashColor, 0f, 4, LegacyStroke);
         }
     }
 
